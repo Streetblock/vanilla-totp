@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="de" class="h-full bg-gray-900 text-white">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TOTP 2FA Code Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .progress-bar-inner {
+            transition: width 1s linear;
+        }
+    </style>
+</head>
+<body class="h-full flex items-center justify-center p-4 bg-gray-900">
+    <div class="w-full max-w-md mx-auto">
+        <div class="bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl shadow-blue-500/10 p-6 sm:p-8">
+            <div class="text-center">
+                <h1 class="text-2xl sm:text-3xl font-bold text-blue-400">TOTP Generator</h1>
+                <p class="mt-2 text-gray-400">Erzeugt 2FA-Codes basierend auf dem TOTP-Algorithmus.</p>
+            </div>
+
+            <div class="mt-8">
+                <label for="secret" class="block text-sm font-medium text-gray-300 mb-2">Ihr geheimer Schlüssel (Base32)</label>
+                <div class="relative">
+                    <input type="password" id="secret" name="secret" class="mono w-full pl-4 pr-12 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200" placeholder="z.B. JBSWY3DPEHPK3PXP">
+                    <button type="button" id="toggle-secret-visibility" class="absolute inset-y-0 right-0 px-4 flex items-center text-gray-500 hover:text-gray-300 transition-colors duration-200">
+                        <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <svg id="eye-off-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                            <line x1="1" y1="1" x2="23" y2="23"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="mt-8 text-center">
+                <p class="text-sm text-gray-400 mb-2">Generierter 2FA Code</p>
+                <div id="otp-display" class="mono text-5xl sm:text-6xl font-bold tracking-widest text-blue-300 h-16 flex items-center justify-center bg-gray-900/50 rounded-lg">
+                    --- ---
+                </div>
+            </div>
+
+            <div class="mt-6">
+                <p class="text-sm text-gray-400 text-center mb-2">Gültig für die nächsten <span id="timer-countdown">30</span>s</p>
+                <div class="w-full bg-gray-700 rounded-full h-2.5">
+                    <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-cyan-400 h-2.5 rounded-full progress-bar-inner"></div>
+                </div>
+            </div>
+
+             <div class="mt-8 text-xs text-gray-500 text-center">
+                <p>Alle Berechnungen finden lokal in Ihrem Browser statt. Ihr geheimer Schlüssel wird niemals gesendet.</p>
+            </div>
+        </div>
+        <div class="mt-6 text-center text-gray-500 text-sm">
+            <p>Made with ❤️ and the Web Crypto API.</p>
+        </div>
+    </div>
+
+    <script>
+        // Implements the Time-based One-Time Password (TOTP) algorithm.
+        class TOTPGenerator {
+            _base32Decode(base32) {
+                const base32chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+                const bits = base32.toUpperCase().replace(/=+$/, '').split('').map(char => {
+                    const val = base32chars.indexOf(char);
+                    if (val === -1) throw new Error("Invalid Base32 character: " + char);
+                    return val.toString(2).padStart(5, '0');
+                }).join('');
+                const chunks = bits.match(/.{1,8}/g) || [];
+                if (chunks.length > 0 && chunks[chunks.length - 1].length < 8) {
+                    chunks.pop();
+                }
+                return new Uint8Array(chunks.map(chunk => parseInt(chunk, 2)));
+            }
+            async generate(secret) {
+                if (!secret) return null;
+                try {
+                    const key = this._base32Decode(secret);
+                    const epoch = Math.floor(Date.now() / 1000);
+                    const timeStep = Math.floor(epoch / 30);
+                    const timeStepBuffer = new ArrayBuffer(8);
+                    const timeStepView = new DataView(timeStepBuffer);
+                    timeStepView.setBigUint64(0, BigInt(timeStep), false);
+                    const cryptoKey = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+                    const hmacResult = await crypto.subtle.sign('HMAC', cryptoKey, timeStepBuffer);
+                    const hmacBytes = new Uint8Array(hmacResult);
+                    const offset = hmacBytes[hmacBytes.length - 1] & 0x0f;
+                    const dataView = new DataView(hmacResult);
+                    const truncatedHash = (dataView.getInt32(offset, false) & 0x7fffffff);
+                    const otp = truncatedHash % 1000000;
+                    return otp.toString().padStart(6, '0');
+                } catch (error) {
+                    console.error("Fehler bei der OTP-Generierung:", error);
+                    return null;
+                }
+            }
+        }
+
+        // --- UI Logic ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const secretInput = document.getElementById('secret');
+            const otpDisplay = document.getElementById('otp-display');
+            const progressBar = document.getElementById('progress-bar');
+            const timerCountdown = document.getElementById('timer-countdown');
+            const toggleButton = document.getElementById('toggle-secret-visibility');
+            const eyeIcon = document.getElementById('eye-icon');
+            const eyeOffIcon = document.getElementById('eye-off-icon');
+
+            // URL-Parameter auslesen oder Dummy-Secret verwenden.
+            const params = new URLSearchParams(window.location.search);
+            const secretFromUrl = params.get('secret');
+            if (secretFromUrl) {
+                secretInput.value = secretFromUrl;
+            } else {
+                secretInput.value = 'JBSWY3DPEHPK3PXP';
+            }
+
+            // Logic to toggle secret visibility
+            toggleButton.addEventListener('click', () => {
+                const isPassword = secretInput.type === 'password';
+                secretInput.type = isPassword ? 'text' : 'password';
+                eyeIcon.classList.toggle('hidden', isPassword);
+                eyeOffIcon.classList.toggle('hidden', !isPassword);
+            });
+
+            const totp = new TOTPGenerator();
+            let lastSecret = '';
+
+            const updateOTP = async () => {
+                const secret = secretInput.value.trim();
+                if (!secret) {
+                    otpDisplay.textContent = '--- ---';
+                    return;
+                }
+                lastSecret = secret;
+                const code = await totp.generate(secret);
+                if (code) {
+                    otpDisplay.textContent = `${code.substring(0, 3)} ${code.substring(3, 6)}`;
+                } else {
+                    otpDisplay.textContent = 'Fehler!';
+                }
+            };
+
+            const updateTimer = () => {
+                const epoch = Math.floor(Date.now() / 1000);
+                const secondsRemaining = 30 - (epoch % 30);
+                const progressPercentage = (secondsRemaining / 30) * 100;
+                timerCountdown.textContent = secondsRemaining;
+                progressBar.style.width = `${progressPercentage}%`;
+                if (secondsRemaining === 30) {
+                    if (secretInput.value.trim() === lastSecret) {
+                         updateOTP();
+                    }
+                }
+            };
+
+            secretInput.addEventListener('input', updateOTP);
+            updateOTP();
+            setInterval(updateTimer, 1000);
+        });
+    </script>
+</body>
+</html>
