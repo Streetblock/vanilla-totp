@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="de" class="h-full bg-gray-900 text-white">
 <head>
     <meta charset="UTF-8">
@@ -47,19 +47,19 @@
 
             <div class="mt-8 text-center">
                 <p class="text-sm text-gray-400 mb-2">Generierter 2FA Code</p>
-                <div id="otp-display" class="mono text-5xl sm:text-6xl font-bold tracking-widest text-blue-300 h-16 flex items-center justify-center bg-gray-900/50 rounded-lg">
+                <div id="otp-display" class="mono text-4xl sm:text-5xl font-bold tracking-widest text-blue-300 h-16 flex items-center justify-center bg-gray-900/50 rounded-lg transition-all duration-300">
                     --- ---
                 </div>
             </div>
 
             <div class="mt-6">
-                <p class="text-sm text-gray-400 text-center mb-2">Gültig für die nächsten <span id="timer-countdown">30</span>s</p>
+                <p class="text-sm text-gray-400 text-center mb-2">Gültig für die nächsten <span id="timer-countdown" class="font-bold text-white">30</span>s</p>
                 <div class="w-full bg-gray-700 rounded-full h-2.5">
                     <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-cyan-400 h-2.5 rounded-full progress-bar-inner"></div>
                 </div>
             </div>
 
-             <div class="mt-8 text-xs text-gray-500 text-center">
+            <div class="mt-8 text-xs text-gray-500 text-center">
                 <p>Alle Berechnungen finden lokal in Ihrem Browser statt. Ihr geheimer Schlüssel wird niemals gesendet.</p>
             </div>
         </div>
@@ -69,8 +69,12 @@
     </div>
 
     <script>
-        // Implements the Time-based One-Time Password (TOTP) algorithm.
         class TOTPGenerator {
+            constructor(period = 30, digits = 6) {
+                this.period = period;
+                this.digits = digits;
+            }
+
             _base32Decode(base32) {
                 const base32chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
                 const bits = base32.toUpperCase().replace(/=+$/, '').split('').map(char => {
@@ -84,23 +88,29 @@
                 }
                 return new Uint8Array(chunks.map(chunk => parseInt(chunk, 2)));
             }
+
             async generate(secret) {
                 if (!secret) return null;
                 try {
                     const key = this._base32Decode(secret);
                     const epoch = Math.floor(Date.now() / 1000);
-                    const timeStep = Math.floor(epoch / 30);
+                    const timeStep = Math.floor(epoch / this.period);
+
                     const timeStepBuffer = new ArrayBuffer(8);
                     const timeStepView = new DataView(timeStepBuffer);
                     timeStepView.setBigUint64(0, BigInt(timeStep), false);
+
                     const cryptoKey = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
                     const hmacResult = await crypto.subtle.sign('HMAC', cryptoKey, timeStepBuffer);
                     const hmacBytes = new Uint8Array(hmacResult);
+
                     const offset = hmacBytes[hmacBytes.length - 1] & 0x0f;
                     const dataView = new DataView(hmacResult);
                     const truncatedHash = (dataView.getInt32(offset, false) & 0x7fffffff);
-                    const otp = truncatedHash % 1000000;
-                    return otp.toString().padStart(6, '0');
+
+                    const modulus = Math.pow(10, this.digits);
+                    const otp = truncatedHash % modulus;
+                    return otp.toString().padStart(this.digits, '0');
                 } catch (error) {
                     console.error("Fehler bei der OTP-Generierung:", error);
                     return null;
@@ -108,67 +118,106 @@
             }
         }
 
-        // --- UI Logic ---
+        class TOTPWidget {
+            constructor(config) {
+                this.period = config.period || 30;
+                this.digits = config.digits || 6;
+                this.generator = new TOTPGenerator(this.period, this.digits);
+
+                this.inputSecret = document.querySelector(config.selectors.input);
+                this.displayOTP = document.querySelector(config.selectors.display);
+                this.progressBar = document.querySelector(config.selectors.progress);
+                this.timerText = document.querySelector(config.selectors.timer);
+
+                this.lastSecret = '';
+                this.intervalId = null;
+
+                this.init();
+            }
+
+            init() {
+                if (this.inputSecret) {
+                    this.inputSecret.addEventListener('input', () => this.updateOTP());
+                }
+
+                this.startTimer();
+                this.updateOTP();
+            }
+
+            formatCode(code) {
+                const half = Math.floor(code.length / 2);
+                return `${code.substring(0, half)} ${code.substring(half)}`;
+            }
+
+            async updateOTP() {
+                if (!this.inputSecret || !this.displayOTP) return;
+
+                const secret = this.inputSecret.value.trim();
+                if (!secret) {
+                    this.displayOTP.textContent = '--- ---';
+                    return;
+                }
+                this.lastSecret = secret;
+
+                const code = await this.generator.generate(secret);
+                if (code) {
+                    this.displayOTP.textContent = this.formatCode(code);
+                } else {
+                    this.displayOTP.textContent = 'Fehler!';
+                }
+            }
+
+            updateTimerUI() {
+                const epoch = Math.floor(Date.now() / 1000);
+                const secondsRemaining = this.period - (epoch % this.period);
+                const progressPercentage = (secondsRemaining / this.period) * 100;
+
+                if (this.timerText) this.timerText.textContent = secondsRemaining;
+                if (this.progressBar) {
+                    this.progressBar.style.transition = secondsRemaining === this.period ? 'none' : 'width 1s linear';
+                    this.progressBar.style.width = `${progressPercentage}%`;
+                }
+
+                if (secondsRemaining === this.period && this.inputSecret.value.trim() === this.lastSecret) {
+                    this.updateOTP();
+                }
+            }
+
+            startTimer() {
+                if (this.intervalId) clearInterval(this.intervalId);
+                this.updateTimerUI();
+                this.intervalId = setInterval(() => this.updateTimerUI(), 1000);
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
+            const totpApp = new TOTPWidget({
+                selectors: {
+                    input: '#secret',
+                    display: '#otp-display',
+                    progress: '#progress-bar',
+                    timer: '#timer-countdown'
+                },
+                period: 30,
+                digits: 6
+            });
+
             const secretInput = document.getElementById('secret');
-            const otpDisplay = document.getElementById('otp-display');
-            const progressBar = document.getElementById('progress-bar');
-            const timerCountdown = document.getElementById('timer-countdown');
-            const toggleButton = document.getElementById('toggle-secret-visibility');
+            const toggleBtn = document.getElementById('toggle-secret-visibility');
             const eyeIcon = document.getElementById('eye-icon');
             const eyeOffIcon = document.getElementById('eye-off-icon');
 
-            // URL-Parameter auslesen oder Dummy-Secret verwenden.
-            const params = new URLSearchParams(window.location.search);
-            const secretFromUrl = params.get('secret');
-            if (secretFromUrl) {
-                secretInput.value = secretFromUrl;
-            } else {
-                secretInput.value = 'JBSWY3DPEHPK3PXP';
-            }
-
-            // Logic to toggle secret visibility
-            toggleButton.addEventListener('click', () => {
+            toggleBtn.addEventListener('click', () => {
                 const isPassword = secretInput.type === 'password';
                 secretInput.type = isPassword ? 'text' : 'password';
                 eyeIcon.classList.toggle('hidden', isPassword);
                 eyeOffIcon.classList.toggle('hidden', !isPassword);
             });
 
-            const totp = new TOTPGenerator();
-            let lastSecret = '';
-
-            const updateOTP = async () => {
-                const secret = secretInput.value.trim();
-                if (!secret) {
-                    otpDisplay.textContent = '--- ---';
-                    return;
-                }
-                lastSecret = secret;
-                const code = await totp.generate(secret);
-                if (code) {
-                    otpDisplay.textContent = `${code.substring(0, 3)} ${code.substring(3, 6)}`;
-                } else {
-                    otpDisplay.textContent = 'Fehler!';
-                }
-            };
-
-            const updateTimer = () => {
-                const epoch = Math.floor(Date.now() / 1000);
-                const secondsRemaining = 30 - (epoch % 30);
-                const progressPercentage = (secondsRemaining / 30) * 100;
-                timerCountdown.textContent = secondsRemaining;
-                progressBar.style.width = `${progressPercentage}%`;
-                if (secondsRemaining === 30) {
-                    if (secretInput.value.trim() === lastSecret) {
-                         updateOTP();
-                    }
-                }
-            };
-
-            secretInput.addEventListener('input', updateOTP);
-            updateOTP();
-            setInterval(updateTimer, 1000);
+            const params = new URLSearchParams(window.location.search);
+            const secretFromUrl = params.get('secret');
+            secretInput.value = secretFromUrl || 'JBSWY3DPEHPK3PXP';
+            totpApp.updateOTP();
         });
     </script>
 </body>
