@@ -12,6 +12,7 @@ class TOTPWidget {
         this.copyIcon = document.querySelector(config.selectors.copyIcon);
         this.copySuccessIcon = document.querySelector(config.selectors.copySuccessIcon);
         this.copyFeedback = document.querySelector(config.selectors.copyFeedback);
+        this.errorText = document.querySelector(config.selectors.error);
 
         this.lastSecret = "";
         this.lastOTP = "";
@@ -49,6 +50,7 @@ class TOTPWidget {
         const secret = this.inputSecret.value.trim();
         if (!secret) {
             if (token !== this.updateToken) return;
+            this.clearSecretError();
             this.displayOTP.textContent = "--- ---";
             this.lastOTP = "";
             this.updateCopyButtonState(false);
@@ -57,19 +59,61 @@ class TOTPWidget {
         this.lastSecret = secret;
         this.lastOTP = "";
         this.updateCopyButtonState(false);
+        this.clearSecretError();
 
-        const code = await this.generator.generate(secret);
-        if (token !== this.updateToken) return;
+        try {
+            const code = await this.generator.generate(secret);
+            if (token !== this.updateToken) return;
 
-        if (code) {
-            this.lastOTP = code;
-            this.displayOTP.textContent = this.formatCode(code);
-            this.updateCopyButtonState(true);
-        } else {
+            if (code) {
+                this.lastOTP = code;
+                this.displayOTP.textContent = this.formatCode(code);
+                this.updateCopyButtonState(true);
+            } else {
+                this.lastOTP = "";
+                this.displayOTP.textContent = "Fehler!";
+                this.updateCopyButtonState(false);
+            }
+        } catch (error) {
+            if (token !== this.updateToken) return;
+
             this.lastOTP = "";
             this.displayOTP.textContent = "Fehler!";
             this.updateCopyButtonState(false);
+            this.showSecretError(this.getSecretErrorMessage(error));
         }
+    }
+
+    showSecretError(message) {
+        if (!this.errorText) return;
+
+        this.errorText.textContent = message;
+        this.errorText.classList.remove("hidden");
+        if (this.inputSecret) {
+            this.inputSecret.classList.add("border-red-500", "focus:ring-red-500", "focus:border-red-500");
+            this.inputSecret.classList.remove("border-gray-600", "focus:ring-blue-500", "focus:border-blue-500");
+        }
+    }
+
+    clearSecretError() {
+        if (!this.errorText) return;
+
+        this.errorText.textContent = "";
+        this.errorText.classList.add("hidden");
+        if (this.inputSecret) {
+            this.inputSecret.classList.remove("border-red-500", "focus:ring-red-500", "focus:border-red-500");
+            this.inputSecret.classList.add("border-gray-600", "focus:ring-blue-500", "focus:border-blue-500");
+        }
+    }
+
+    getSecretErrorMessage(error) {
+        const message = error && typeof error.message === "string" ? error.message : "";
+        if (message.startsWith("Invalid Base32 character:")) {
+            const invalidChar = message.split(":").slice(1).join(":").trim();
+            return `Ungültiges Base32-Zeichen: ${invalidChar}`;
+        }
+
+        return "Ungültiger Base32-Schlüssel.";
     }
 
     updateCopyButtonState(enabled) {
