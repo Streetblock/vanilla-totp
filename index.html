@@ -47,9 +47,21 @@
 
             <div class="mt-8 text-center">
                 <p class="text-sm text-gray-400 mb-2">Generierter 2FA Code</p>
-                <div id="otp-display" class="mono text-4xl sm:text-5xl font-bold tracking-widest text-blue-300 h-16 flex items-center justify-center bg-gray-900/50 rounded-lg transition-all duration-300">
-                    --- ---
+                <div class="relative">
+                    <div id="otp-display" class="mono text-4xl sm:text-5xl font-bold tracking-widest text-blue-300 h-16 flex items-center justify-center bg-gray-900/50 rounded-lg transition-all duration-300 pr-14">
+                        --- ---
+                    </div>
+                    <button type="button" id="copy-otp" class="absolute inset-y-0 right-0 px-4 flex items-center text-gray-500 hover:text-blue-300 transition-colors duration-200 disabled:opacity-30 disabled:cursor-not-allowed" aria-label="TOTP-Code kopieren" title="TOTP-Code kopieren" disabled>
+                        <svg id="copy-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        <svg id="copy-success-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden text-green-400">
+                            <path d="M20 6 9 17l-5-5"></path>
+                        </svg>
+                    </button>
                 </div>
+                <p id="copy-feedback" class="mt-2 text-xs text-green-400 opacity-0 transition-opacity duration-200" aria-live="polite">Code in die Zwischenablage kopiert</p>
             </div>
 
             <div class="mt-6">
@@ -76,6 +88,10 @@
                 selectors: {
                     input: '#secret',
                     display: '#otp-display',
+                    copy: '#copy-otp',
+                    copyIcon: '#copy-icon',
+                    copySuccessIcon: '#copy-success-icon',
+                    copyFeedback: '#copy-feedback',
                     progress: '#progress-bar',
                     timer: '#timer-countdown'
                 },

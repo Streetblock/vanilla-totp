@@ -8,9 +8,15 @@ class TOTPWidget {
         this.displayOTP = document.querySelector(config.selectors.display);
         this.progressBar = document.querySelector(config.selectors.progress);
         this.timerText = document.querySelector(config.selectors.timer);
+        this.copyButton = document.querySelector(config.selectors.copy);
+        this.copyIcon = document.querySelector(config.selectors.copyIcon);
+        this.copySuccessIcon = document.querySelector(config.selectors.copySuccessIcon);
+        this.copyFeedback = document.querySelector(config.selectors.copyFeedback);
 
         this.lastSecret = "";
+        this.lastOTP = "";
         this.intervalId = null;
+        this.copyFeedbackTimeoutId = null;
 
         this.init();
     }
@@ -18,6 +24,10 @@ class TOTPWidget {
     init() {
         if (this.inputSecret) {
             this.inputSecret.addEventListener("input", () => this.updateOTP());
+        }
+
+        if (this.copyButton) {
+            this.copyButton.addEventListener("click", () => this.copyOTP());
         }
 
         this.startTimer();
@@ -35,15 +45,83 @@ class TOTPWidget {
         const secret = this.inputSecret.value.trim();
         if (!secret) {
             this.displayOTP.textContent = "--- ---";
+            this.lastOTP = "";
+            this.updateCopyButtonState(false);
             return;
         }
         this.lastSecret = secret;
+        this.lastOTP = "";
+        this.updateCopyButtonState(false);
 
         const code = await this.generator.generate(secret);
         if (code) {
+            this.lastOTP = code;
             this.displayOTP.textContent = this.formatCode(code);
+            this.updateCopyButtonState(true);
         } else {
+            this.lastOTP = "";
             this.displayOTP.textContent = "Fehler!";
+            this.updateCopyButtonState(false);
+        }
+    }
+
+    updateCopyButtonState(enabled) {
+        if (!this.copyButton) return;
+
+        if (this.copyFeedbackTimeoutId) {
+            clearTimeout(this.copyFeedbackTimeoutId);
+            this.copyFeedbackTimeoutId = null;
+        }
+
+        this.copyButton.disabled = !enabled;
+        if (this.copyIcon) this.copyIcon.classList.remove("hidden");
+        if (this.copySuccessIcon) this.copySuccessIcon.classList.add("hidden");
+        if (this.copyFeedback) {
+            this.copyFeedback.classList.add("opacity-0");
+            this.copyFeedback.classList.remove("opacity-100");
+        }
+    }
+
+    flashCopySuccess() {
+        if (!this.copyButton || !this.copyIcon || !this.copySuccessIcon || !this.copyFeedback) return;
+
+        if (this.copyFeedbackTimeoutId) clearTimeout(this.copyFeedbackTimeoutId);
+
+        this.copyIcon.classList.add("hidden");
+        this.copySuccessIcon.classList.remove("hidden");
+        this.copyFeedback.classList.remove("opacity-0");
+        this.copyFeedback.classList.add("opacity-100");
+
+        this.copyFeedbackTimeoutId = setTimeout(() => {
+            this.copySuccessIcon.classList.add("hidden");
+            this.copyIcon.classList.remove("hidden");
+            this.copyFeedback.classList.remove("opacity-100");
+            this.copyFeedback.classList.add("opacity-0");
+            this.copyFeedbackTimeoutId = null;
+        }, 1400);
+    }
+
+    async copyOTP() {
+        if (!this.lastOTP) return;
+
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(this.lastOTP);
+            } else {
+                const textarea = document.createElement("textarea");
+                textarea.value = this.lastOTP;
+                textarea.setAttribute("readonly", "true");
+                textarea.style.position = "absolute";
+                textarea.style.left = "-9999px";
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand("copy");
+                document.body.removeChild(textarea);
+            }
+
+            this.flashCopySuccess();
+        } catch (error) {
+            console.error("Could not copy TOTP code:", error);
         }
     }
 
