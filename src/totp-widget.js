@@ -134,9 +134,16 @@ class TOTPWidget {
 
     handleKeyboardShortcuts(event) {
         const key = event.key.toLowerCase();
-        const isDirectCopy = (event.ctrlKey || event.metaKey) && !event.shiftKey && key === "c" && document.activeElement === this.displayOTP;
+        const isCopyShortcut = (event.ctrlKey || event.metaKey) && !event.shiftKey && key === "c";
         const isFallbackCopy = (event.ctrlKey || event.metaKey) && event.shiftKey && key === "c";
-        if ((!isDirectCopy && !isFallbackCopy) || !this.lastOTP) return;
+        if ((!isCopyShortcut && !isFallbackCopy) || !this.lastOTP) return;
+
+        const target = event.target;
+        const isEditableTarget = target instanceof HTMLElement && (
+            target.matches("input, textarea") ||
+            target.isContentEditable
+        );
+        if (isEditableTarget) return;
 
         event.preventDefault();
         this.copyOTP();
