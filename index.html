@@ -48,7 +48,7 @@
             <div class="mt-8 text-center">
                 <p class="text-sm text-gray-400 mb-2">Generierter 2FA Code</p>
                 <div class="relative">
-                    <div id="otp-display" tabindex="0" role="button" aria-label="Generierten 2FA-Code kopieren" title="Strg+C kopiert den Code auf der ganzen Seite" class="mono text-4xl sm:text-5xl font-bold tracking-widest text-blue-300 h-16 flex items-center justify-center bg-gray-900/50 rounded-lg transition-all duration-300 pr-14 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <div id="otp-display" tabindex="0" role="button" aria-label="Generierten 2FA-Code kopieren" title="Strg+C kopiert den Code auf der ganzen Seite" class="mono text-5xl sm:text-6xl font-bold tracking-widest text-blue-300 h-16 flex items-center justify-center bg-gray-900/50 rounded-lg transition-all duration-300 pr-12 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500">
                         --- ---
                     </div>
                     <button type="button" id="copy-otp" class="absolute inset-y-0 right-0 px-4 flex items-center text-gray-500 hover:text-blue-300 transition-colors duration-200 disabled:opacity-30 disabled:cursor-not-allowed" aria-label="TOTP-Code kopieren" title="TOTP-Code kopieren" disabled>
@@ -60,8 +60,8 @@
                             <path d="M20 6 9 17l-5-5"></path>
                         </svg>
                     </button>
+                    <p id="copy-feedback" class="pointer-events-none absolute left-0 right-0 top-full mt-1 text-xs text-green-400 opacity-0 transition-opacity duration-200" aria-live="polite">Code in die Zwischenablage kopiert</p>
                 </div>
-                <p id="copy-feedback" class="mt-2 text-xs text-green-400 opacity-0 transition-opacity duration-200" aria-live="polite">Code in die Zwischenablage kopiert</p>
             </div>
 
             <div class="mt-6">
