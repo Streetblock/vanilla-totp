@@ -17,6 +17,7 @@ class TOTPWidget {
         this.lastOTP = "";
         this.intervalId = null;
         this.copyFeedbackTimeoutId = null;
+        this.updateToken = 0;
 
         this.init();
     }
@@ -30,6 +31,8 @@ class TOTPWidget {
             this.copyButton.addEventListener("click", () => this.copyOTP());
         }
 
+        document.addEventListener("keydown", (event) => this.handleKeyboardShortcuts(event));
+
         this.startTimer();
         this.updateOTP();
     }
@@ -42,8 +45,10 @@ class TOTPWidget {
     async updateOTP() {
         if (!this.inputSecret || !this.displayOTP) return;
 
+        const token = ++this.updateToken;
         const secret = this.inputSecret.value.trim();
         if (!secret) {
+            if (token !== this.updateToken) return;
             this.displayOTP.textContent = "--- ---";
             this.lastOTP = "";
             this.updateCopyButtonState(false);
@@ -54,6 +59,8 @@ class TOTPWidget {
         this.updateCopyButtonState(false);
 
         const code = await this.generator.generate(secret);
+        if (token !== this.updateToken) return;
+
         if (code) {
             this.lastOTP = code;
             this.displayOTP.textContent = this.formatCode(code);
@@ -123,6 +130,16 @@ class TOTPWidget {
         } catch (error) {
             console.error("Could not copy TOTP code:", error);
         }
+    }
+
+    handleKeyboardShortcuts(event) {
+        const key = event.key.toLowerCase();
+        const isDirectCopy = (event.ctrlKey || event.metaKey) && !event.shiftKey && key === "c" && document.activeElement === this.displayOTP;
+        const isFallbackCopy = (event.ctrlKey || event.metaKey) && event.shiftKey && key === "c";
+        if ((!isDirectCopy && !isFallbackCopy) || !this.lastOTP) return;
+
+        event.preventDefault();
+        this.copyOTP();
     }
 
     updateTimerUI() {
